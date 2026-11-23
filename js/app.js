@@ -19,7 +19,42 @@ const catImages={'Chupetes':'img/clasicos-1.jpg','Promociones':'img/promo.jpg','
 function open(id){$('#'+id).hidden=false;document.body.classList.add('lock')}
 function close(id){$('#'+id).hidden=true;if(!$$('.overlay').some(e=>!e.hidden))document.body.classList.remove('lock')}
 function toast(t){let e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>e.classList.remove('show'),2700)}
-function init(){ $('#year').textContent=new Date().getFullYear();$('#categoryTiles').innerHTML=categories.slice(1).filter(c=>c!=='Promociones').map(c=>`<button class="cat-tile" data-cat="${safe(c)}"><img loading="lazy" src="${catImages[c]}" alt=""><strong>${safe(c)}</strong></button>`).join(''); renderFilters();renderProducts();renderCart();
+function setupOffers() {
+ const track = $('.offer-track');
+ const slides = Array.from(track.children);
+ const motion = matchMedia('(prefers-reduced-motion: reduce)');
+ let paused = motion.matches;
+ let timer;
+ const index = () => Math.round(track.scrollLeft / track.clientWidth);
+ function move(step) {
+   const next = (index() + step + slides.length) % slides.length;
+   track.scrollTo({left: next * track.clientWidth, behavior: motion.matches ? 'instant' : 'smooth'});
+ }
+ function schedule() {
+   clearTimeout(timer);
+   if (!paused && !document.hidden) timer = setTimeout(() => {
+     move(1);
+     schedule();
+   }, 5500);
+ }
+ function updatePlay() {
+   $('#offerPlay').textContent = paused ? '▶' : 'Ⅱ';
+   $('#offerPlay').setAttribute('aria-label', paused ? 'Reanudar rotación automática' : 'Pausar rotación automática');
+   schedule();
+ }
+ track.addEventListener('scroll', () => {
+   $('#offerCount').textContent = (index() + 1) + ' / ' + slides.length;
+   schedule();
+ }, {passive:true});
+ $('#offerPrev').onclick = () => move(-1);
+ $('#offerNext').onclick = () => move(1);
+ $('#offerPlay').onclick = () => { paused = !paused; updatePlay(); };
+ track.addEventListener('pointerdown', () => clearTimeout(timer));
+ window.addEventListener('pointerup', schedule);
+ document.addEventListener('visibilitychange', schedule);
+ updatePlay();
+}
+function init(){ setupOffers(); $('#year').textContent=new Date().getFullYear();$('#categoryTiles').innerHTML=categories.slice(1).filter(c=>c!=='Promociones').map(c=>`<button class="cat-tile" data-cat="${safe(c)}"><img loading="lazy" src="${catImages[c]}" alt=""><strong>${safe(c)}</strong></button>`).join(''); renderFilters();renderProducts();renderCart();
  $('#search').addEventListener('input',e=>{searchTerm=e.target.value.toLocaleLowerCase('es');renderProducts()});
  document.addEventListener('click',e=>{let cat=e.target.closest('[data-cat]');if(cat){activeCat=cat.dataset.cat;renderFilters();renderProducts();document.getElementById('catalogo').scrollIntoView({behavior:'smooth'});}let fil=e.target.closest('[data-filter]');if(fil){activeCat=fil.dataset.filter;renderFilters();renderProducts()}let p=e.target.closest('[data-product]');if(p)showProduct(p.dataset.product);let cl=e.target.closest('[data-close]');if(cl)close(cl.dataset.close);let rm=e.target.closest('[data-remove]');if(rm){cart.splice(+rm.dataset.remove,1);saveCart();renderCart()}let go=e.target.closest('[data-go]');if(go){activeCat=go.dataset.go;renderFilters();renderProducts()}});
  $$('.overlay').forEach(e=>e.addEventListener('mousedown',ev=>{if(ev.target===e)close(e.id)}));document.addEventListener('keydown',e=>{if(e.key==='Escape')$$('.overlay').filter(x=>!x.hidden).forEach(x=>close(x.id))});
@@ -27,7 +62,7 @@ function init(){ $('#year').textContent=new Date().getFullYear();$('#categoryTil
  try{if(!sessionStorage.getItem('mery-welcome')){setTimeout(()=>open('welcomeOverlay'),350);sessionStorage.setItem('mery-welcome','1')}}catch{}
 }
 function renderFilters(){$('#filters').innerHTML=categories.map(c=>`<button class="filter ${c===activeCat?'active':''}" data-filter="${safe(c)}">${safe(c)}</button>`).join('')}
-function renderProducts(){let items=CATALOG.filter(p=>(activeCat==='Todos'||p.cat===activeCat)&&(!searchTerm||[p.title,p.subtitle,p.cat,...(p.variants||[]).map(v=>v.name)].join(' ').toLocaleLowerCase('es').includes(searchTerm)));$('#empty').hidden=items.length>0;$('#productGrid').innerHTML=items.map((p,i)=>`<article class="product-card" style="animation-delay:${Math.min(i*35,300)}ms"><div class="product-photo"><img src="${p.image}" loading="lazy" alt="${safe(p.title)}"><span class="tag">${safe(p.cat)}</span></div><div class="product-body"><h3>${safe(p.title)}</h3><p>${safe(p.subtitle)}</p><div class="product-foot"><strong class="price ${p.price===null?'ask':''}">${p.price===null?'Precio a consultar':(p.id==='cremas'?'Desde ':'')+money(p.price)}</strong><button class="add-button" data-product="${p.id}" aria-label="Ver ${safe(p.title)}">+</button></div></div></article>`).join('')}
+function renderProducts(){let items=CATALOG.filter(p=>(activeCat==='Todos'||p.cat===activeCat)&&(!searchTerm||[p.title,p.subtitle,p.cat,...(p.variants||[]).map(v=>v.name)].join(' ').toLocaleLowerCase('es').includes(searchTerm)));$('#empty').hidden=items.length>0;$('#productGrid').innerHTML=items.map((p,i)=>`<article class="product-card" style="animation-delay:${Math.min(i*35,300)}ms"><button type="button" class="product-photo" data-product="${p.id}" aria-label="Ver ${safe(p.title)}"><img src="${p.image}" loading="lazy" alt="${safe(p.title)}"><span class="tag">${safe(p.cat)}</span></button><div class="product-body"><h3>${safe(p.title)}</h3><p>${safe(p.subtitle)}</p><div class="product-foot"><strong class="price ${p.price===null?'ask':''}">${p.price===null?'Precio a consultar':(p.id==='cremas'?'Desde ':'')+money(p.price)}</strong><button class="add-button" data-product="${p.id}" aria-label="Ver ${safe(p.title)}">+</button></div></div></article>`).join('')}
 function showProduct(id){selected=CATALOG.find(p=>p.id===id);if(!selected)return;qty=1;chosenVariant='';chosenSize=selected.sizes?.[0]?.name||'';selectedFruit=[];selectedToppings=[];selectedSyrups=[];selectedExtras=[];renderProductModal();open('productOverlay')}
 function chips(label,key,values){
  const options=values.map(option=>{
